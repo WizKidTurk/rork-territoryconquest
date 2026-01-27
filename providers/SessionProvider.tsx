@@ -304,29 +304,30 @@ export const [SessionProvider, useSession] = createContextHook(() => {
   }, []);
 
   useEffect(() => {
-    const claimDefaultNickname = async () => {
-      if (!isInitialized) return;
+    if (!isInitialized) return;
+    
+    const timer = setTimeout(async () => {
       const current = (nickname ?? '').trim();
       if (!current) return;
       try {
         const ok = await isNicknameAvailable(current);
-        if (ok) {
-          return;
-        }
+        if (ok) return;
+        
         const base = current.replace(/\s+\d{3,}$/,'');
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 10; i++) {
           const candidate = `${base} ${Math.floor(100 + Math.random() * 900)}`;
           const free = await isNicknameAvailable(candidate);
           if (free) {
-            await updateProfile(candidate, avatarStyle);
+            await updateProfile(candidate, avatarStyle).catch(() => {});
             break;
           }
         }
       } catch (e) {
         console.log('⚠️ Auto-claim nickname failed:', e);
       }
-    };
-    claimDefaultNickname();
+    }, 2000);
+    
+    return () => clearTimeout(timer);
   }, [isInitialized]);
 
   const ownerIdRef = useRef<string>(ownerId);
@@ -335,6 +336,8 @@ export const [SessionProvider, useSession] = createContextHook(() => {
   }, [ownerId]);
 
   useEffect(() => {
+    if (!isInitialized) return;
+    
     const refs = getFirebase();
     if (!refs) {
       console.log("🔥 Firebase not configured - territories won't sync");
@@ -410,7 +413,7 @@ export const [SessionProvider, useSession] = createContextHook(() => {
     } catch (e) {
       console.log("❌ Firestore subscription setup failed", e);
     }
-  }, []);
+  }, [isInitialized]);
 
   const startPedometer = useCallback(async () => {
     if (Platform.OS === "web") {
