@@ -4,6 +4,26 @@ import { MapPin, Navigation } from "lucide-react-native";
 import { ModeColors, ActivityMode, Player } from "@/constants/game";
 import type { LatLng, Territory } from "@/providers/SessionProvider";
 
+let MapViewModule: any = null;
+let MarkerModule: any = null;
+let PolylineModule: any = null;
+let PolygonModule: any = null;
+let LocationModule: any = null;
+let mapsLoadError = false;
+
+try {
+  MapViewModule = require("react-native-maps").default;
+  const maps = require("react-native-maps");
+  MarkerModule = maps.Marker;
+  PolylineModule = maps.Polyline;
+  PolygonModule = maps.Polygon;
+  LocationModule = require("expo-location");
+  console.log('✅ react-native-maps loaded successfully');
+} catch (e) {
+  console.log('❌ Failed to load react-native-maps at module level:', e);
+  mapsLoadError = true;
+}
+
 export type TrackingMapProps = {
   style?: StyleProp<ViewStyle>;
   region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null;
@@ -54,28 +74,19 @@ function NativeMap({
 }: TrackingMapProps & { onError?: () => void }) {
   const mapRef = useRef<any>(null);
   const [heading, setHeading] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const hasCalledError = useRef(false);
   
-  let MapView: any = null;
-  let Marker: any = null;
-  let Polyline: any = null;
-  let Polygon: any = null;
-  let Location: any = null;
+  const MapView = MapViewModule;
+  const Marker = MarkerModule;
+  const Polyline = PolylineModule;
+  const Polygon = PolygonModule;
   
-  try {
-    MapView = require("react-native-maps").default;
-    const maps = require("react-native-maps");
-    Marker = maps.Marker;
-    Polyline = maps.Polyline;
-    Polygon = maps.Polygon;
-    Location = require("expo-location");
-  } catch (e) {
-    console.log('❌ Failed to load react-native-maps:', e);
-    if (!loadError) {
-      setLoadError(true);
+  useEffect(() => {
+    if (mapsLoadError && !hasCalledError.current) {
+      hasCalledError.current = true;
       onError?.();
     }
-  }
+  }, [onError]);
 
   const territoryPolys = useMemo(() => {
     if (!territories || !Array.isArray(territories)) return [];
@@ -122,25 +133,28 @@ function NativeMap({
     let cancelled = false;
     (async () => {
       try {
-        if (!isTracking || !Location) return;
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!isTracking || !LocationModule) return;
+        const { status } = await LocationModule.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
-        sub = await Location.watchHeadingAsync((h: any) => {
+        sub = await LocationModule.watchHeadingAsync((h: any) => {
           if (cancelled) return;
           const deg = (h?.trueHeading ?? h?.magHeading ?? -1);
           if (typeof deg === "number" && isFinite(deg) && deg >= 0) {
             setHeading(deg);
           }
         });
-      } catch {}
+      } catch (e) {
+        console.log('❌ Heading watch error:', e);
+      }
     })();
     return () => {
       cancelled = true;
       try { sub?.remove(); } catch {}
     };
-  }, [isTracking, Location]);
+  }, [isTracking]);
 
-  if (!region || loadError || !MapView) {
+  if (!region || mapsLoadError || !MapView) {
+    console.log('🗺️ NativeMap returning null:', { hasRegion: !!region, mapsLoadError, hasMapView: !!MapView });
     return null;
   }
 
