@@ -21,17 +21,16 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const { isInitialized } = useSession();
   const [isReady, setIsReady] = useState<boolean>(false);
-  const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
   const didNavigateRef = useRef<boolean>(false);
+  const isNavigatingRef = useRef<boolean>(false);
 
   useEffect(() => {
+    if (didNavigateRef.current || isNavigatingRef.current) return;
+    
     const timeout = setTimeout(() => {
-      if (!isReady && !didNavigateRef.current) {
-        console.log('⚠️ Initialization timeout - forcing navigation');
-        setHasTimedOut(true);
+      if (!isReady && !didNavigateRef.current && !isNavigatingRef.current) {
+        console.log('⚠️ Initialization timeout - forcing ready state');
         setIsReady(true);
-        didNavigateRef.current = true;
-        setTimeout(() => router.replace("/splash"), 100);
       }
     }, 5000);
 
@@ -39,31 +38,36 @@ function RootLayoutNav() {
   }, [isReady]);
 
   useEffect(() => {
-    if (isInitialized && !didNavigateRef.current) {
-      console.log('✅ SessionProvider initialized');
-      setIsReady(true);
-      didNavigateRef.current = true;
-      
-      AsyncStorage.getItem("hasSeenSplash")
-        .then((value) => {
-          console.log('🔍 Splash status:', value);
-          if (value === "true") {
-            console.log('👤 Returning user, navigating to game');
-            setTimeout(() => router.replace("/(tabs)/(play)"), 100);
-          } else {
-            console.log('✨ New user, showing splash');
-            setTimeout(() => router.replace("/splash"), 100);
-          }
-        })
-        .catch(() => {
-          console.log('⚠️ Failed to read splash status, showing splash');
-          setTimeout(() => router.replace("/splash"), 100);
-        });
-    }
+    if (!isInitialized || didNavigateRef.current || isNavigatingRef.current) return;
+    
+    console.log('✅ SessionProvider initialized');
+    isNavigatingRef.current = true;
+    
+    AsyncStorage.getItem("hasSeenSplash")
+      .then((value) => {
+        if (didNavigateRef.current) return;
+        didNavigateRef.current = true;
+        setIsReady(true);
+        
+        console.log('🔍 Splash status:', value);
+        if (value === "true") {
+          console.log('👤 Returning user, navigating to game');
+          router.replace("/(tabs)/(play)");
+        } else {
+          console.log('✨ New user, showing splash');
+          router.replace("/splash");
+        }
+      })
+      .catch(() => {
+        if (didNavigateRef.current) return;
+        didNavigateRef.current = true;
+        setIsReady(true);
+        console.log('⚠️ Failed to read splash status, showing splash');
+        router.replace("/splash");
+      });
   }, [isInitialized]);
   
   if (!isReady) {
-    console.log('⏳ Waiting for SessionProvider...');
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#007AFF" />

@@ -329,6 +329,11 @@ export const [SessionProvider, useSession] = createContextHook(() => {
     claimDefaultNickname();
   }, [isInitialized]);
 
+  const ownerIdRef = useRef<string>(ownerId);
+  useEffect(() => {
+    ownerIdRef.current = ownerId;
+  }, [ownerId]);
+
   useEffect(() => {
     const refs = getFirebase();
     if (!refs) {
@@ -378,10 +383,11 @@ export const [SessionProvider, useSession] = createContextHook(() => {
 
             setTerritories(() => {
               const sorted = [...remote].sort((a, b) => b.createdAt - a.createdAt);
+              const currentOwnerId = ownerIdRef.current;
               console.log(`💾 Synced total (remote only): ${sorted.length} territories`);
-              console.log(`🎮 Your ownerId: ${ownerId}`);
-              const yourTerritories = sorted.filter(t => t.owners.some(o => o.ownerId === ownerId));
-              const otherTerritories = sorted.filter(t => !t.owners.some(o => o.ownerId === ownerId));
+              console.log(`🎮 Your ownerId: ${currentOwnerId}`);
+              const yourTerritories = sorted.filter(t => t.owners.some(o => o.ownerId === currentOwnerId));
+              const otherTerritories = sorted.filter(t => !t.owners.some(o => o.ownerId === currentOwnerId));
               console.log(`   - Your territories: ${yourTerritories.length}`);
               console.log(`   - Other players' territories: ${otherTerritories.length}`);
               saveTerritoriesLocally(sorted).catch(() => {});
