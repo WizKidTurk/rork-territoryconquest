@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState } from "react";
+import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { StyleProp, ViewStyle, View, Text, StyleSheet, Image, Platform } from "react-native";
 import { MapPin, Navigation } from "lucide-react-native";
 import { ModeColors, ActivityMode, Player } from "@/constants/game";
@@ -20,10 +20,25 @@ export type TrackingMapProps = {
 };
 
 export default function TrackingMap(props: TrackingMapProps) {
+  console.log('🗺️ TrackingMap rendering, Platform.OS:', Platform.OS);
+  
   if (Platform.OS === "web") {
+    console.log('🌐 Using web fallback for map');
     return <WebMapFallback {...props} />;
   }
-  return <NativeMap {...props} />;
+  
+  return <NativeMapWrapper {...props} />;
+}
+
+function NativeMapWrapper(props: TrackingMapProps) {
+  const [hasError, setHasError] = useState(false);
+  
+  if (hasError) {
+    console.log('❌ NativeMap had an error, showing fallback');
+    return <WebMapFallback {...props} />;
+  }
+  
+  return <NativeMap {...props} onError={() => setHasError(true)} />;
 }
 
 function NativeMap({
@@ -39,10 +54,26 @@ function NativeMap({
   nickname = "Player",
   avatarStyle = "shapes",
   isTracking = false,
-}: TrackingMapProps) {
-  const MapView = require("react-native-maps").default;
-  const { Marker, Polyline, Polygon } = require("react-native-maps");
-  const Location = require("expo-location");
+  onError,
+}: TrackingMapProps & { onError?: () => void }) {
+  let MapView: any;
+  let Marker: any;
+  let Polyline: any;
+  let Polygon: any;
+  let Location: any;
+  
+  try {
+    MapView = require("react-native-maps").default;
+    const maps = require("react-native-maps");
+    Marker = maps.Marker;
+    Polyline = maps.Polyline;
+    Polygon = maps.Polygon;
+    Location = require("expo-location");
+  } catch (e) {
+    console.log('❌ Failed to load react-native-maps:', e);
+    onError?.();
+    return null;
+  }
 
   const mapRef = useRef<any>(null);
   const [heading, setHeading] = useState<number | null>(null);
