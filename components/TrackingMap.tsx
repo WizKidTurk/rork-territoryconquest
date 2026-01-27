@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import { StyleProp, ViewStyle, View, Text, StyleSheet, Image, Platform } from "react-native";
 import { MapPin, Navigation } from "lucide-react-native";
 import { ModeColors, ActivityMode, Player } from "@/constants/game";
@@ -22,11 +22,7 @@ export type TrackingMapProps = {
 export default function TrackingMap(props: TrackingMapProps) {
   console.log('🗺️ TrackingMap rendering, Platform.OS:', Platform.OS);
   
-  if (Platform.OS === "web") {
-    console.log('🌐 Using web fallback for map');
-    return <WebMapFallback {...props} />;
-  }
-  
+  // react-native-maps is polyfilled for web, so we can use NativeMapWrapper on all platforms
   return <NativeMapWrapper {...props} />;
 }
 
@@ -56,11 +52,15 @@ function NativeMap({
   isTracking = false,
   onError,
 }: TrackingMapProps & { onError?: () => void }) {
-  let MapView: any;
-  let Marker: any;
-  let Polyline: any;
-  let Polygon: any;
-  let Location: any;
+  const mapRef = useRef<any>(null);
+  const [heading, setHeading] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  
+  let MapView: any = null;
+  let Marker: any = null;
+  let Polyline: any = null;
+  let Polygon: any = null;
+  let Location: any = null;
   
   try {
     MapView = require("react-native-maps").default;
@@ -71,12 +71,11 @@ function NativeMap({
     Location = require("expo-location");
   } catch (e) {
     console.log('❌ Failed to load react-native-maps:', e);
-    onError?.();
-    return null;
+    if (!loadError) {
+      setLoadError(true);
+      onError?.();
+    }
   }
-
-  const mapRef = useRef<any>(null);
-  const [heading, setHeading] = useState<number | null>(null);
 
   const territoryPolys = useMemo(() => {
     if (!territories || !Array.isArray(territories)) return [];
@@ -123,7 +122,7 @@ function NativeMap({
     let cancelled = false;
     (async () => {
       try {
-        if (!isTracking) return;
+        if (!isTracking || !Location) return;
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
         sub = await Location.watchHeadingAsync((h: any) => {
@@ -139,9 +138,9 @@ function NativeMap({
       cancelled = true;
       try { sub?.remove(); } catch {}
     };
-  }, [isTracking]);
+  }, [isTracking, Location]);
 
-  if (!region) {
+  if (!region || loadError || !MapView) {
     return null;
   }
 
