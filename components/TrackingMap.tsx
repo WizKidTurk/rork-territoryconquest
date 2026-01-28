@@ -75,6 +75,7 @@ function NativeMap({
   const mapRef = useRef<any>(null);
   const [heading, setHeading] = useState<number | null>(null);
   const hasCalledError = useRef(false);
+  const hasInitiallyZoomed = useRef(false);
   
   const MapView = MapViewModule;
   const Marker = MarkerModule;
@@ -127,6 +128,28 @@ function NativeMap({
         return { id: t.id, coords, stroke: strokeColor, fill: fillColor, isYours, contested } as const;
       });
   }, [territories, ownerId, ownerColor]);
+
+  useEffect(() => {
+    if (region && mapRef.current && !hasInitiallyZoomed.current) {
+      hasInitiallyZoomed.current = true;
+      console.log('🗺️ Initial zoom to user location:', region.latitude, region.longitude);
+      setTimeout(() => {
+        try {
+          mapRef.current?.animateToRegion(
+            {
+              latitude: region.latitude,
+              longitude: region.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            },
+            800
+          );
+        } catch (e) {
+          console.log('❌ Failed to animate to initial region:', e);
+        }
+      }, 500);
+    }
+  }, [region]);
 
   useEffect(() => {
     if (lastPoint && mapRef.current) {
@@ -192,11 +215,17 @@ function NativeMap({
     <MapView
       ref={mapRef}
       style={style}
-      initialRegion={region}
+      initialRegion={{
+        latitude: region.latitude,
+        longitude: region.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }}
       showsUserLocation
       showsMyLocationButton
       showsCompass
       rotateEnabled
+      followsUserLocation={!isTracking}
       testID="map-native"
     >
       {territoryPolys.map((p, idx) => (
