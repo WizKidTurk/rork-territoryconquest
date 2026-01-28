@@ -68,32 +68,41 @@ function Inner() {
             setInitialRegion(fallbackRegion);
           }
         } else {
+          let permissionStatus = "denied";
           try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") {
-              console.log("📍 Location permission not granted");
+            const result = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: "denied" as const }));
+            permissionStatus = result.status;
+          } catch {
+            console.log("📍 Location permission request failed - using fallback");
+            if (!cancelled) setInitialRegion(fallbackRegion);
+            return;
+          }
+          
+          if (permissionStatus !== "granted") {
+            console.log("📍 Location permission not granted");
+            if (!cancelled) {
               setShowLocationPrompt(true);
               setInitialRegion(fallbackRegion);
-              return;
             }
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+            return;
+          }
+          
+          try {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest }).catch(() => null);
             if (cancelled) return;
-            setInitialRegion({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-              latitudeDelta: 0.003,
-              longitudeDelta: 0.003,
-            });
-          } catch (locError: any) {
-            console.log("📍 Location error:", locError?.message || locError);
-            if (!cancelled) {
-              if (locError?.message?.includes("NSLocation") || locError?.message?.includes("Info.plist")) {
-                console.log("📍 Location permissions not configured in Info.plist - using fallback");
-              } else {
-                setShowLocationPrompt(true);
-              }
+            if (loc) {
+              setInitialRegion({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                latitudeDelta: 0.003,
+                longitudeDelta: 0.003,
+              });
+            } else {
               setInitialRegion(fallbackRegion);
             }
+          } catch {
+            console.log("📍 Failed to get current position - using fallback");
+            if (!cancelled) setInitialRegion(fallbackRegion);
           }
         }
       } catch (e: any) {

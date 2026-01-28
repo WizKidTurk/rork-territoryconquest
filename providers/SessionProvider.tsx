@@ -498,28 +498,29 @@ export const [SessionProvider, useSession] = createContextHook(() => {
       );
       watchSub.current = id;
     } else {
+      let permissionStatus = "denied";
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          console.log("📍 Location permission not granted");
-          setLocationPermissionDenied(true);
-          setState("idle");
-          setMode(null);
-          return;
-        }
-      } catch (permError: any) {
-        const errorMsg = permError?.message || String(permError);
-        console.log("📍 Location permission error:", errorMsg);
-        if (errorMsg.includes("NSLocation") || errorMsg.includes("Info.plist")) {
-          console.log("📍 Location permissions not configured - this is expected in Expo Go");
-          console.log("📍 Please use a development build or standalone app for full location support");
-        }
+        const result = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: "denied" as const }));
+        permissionStatus = result.status;
+      } catch {
+        console.log("📍 Location permission request failed");
         setLocationPermissionDenied(true);
         setState("idle");
         setMode(null);
         return;
       }
-      const sub = await Location.watchPositionAsync(
+      
+      if (permissionStatus !== "granted") {
+        console.log("📍 Location permission not granted");
+        setLocationPermissionDenied(true);
+        setState("idle");
+        setMode(null);
+        return;
+      }
+      
+      let sub: Location.LocationSubscription | null = null;
+      try {
+        sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
         (loc) => {
           if (loc.coords.accuracy && loc.coords.accuracy > 50) {
@@ -543,8 +544,23 @@ export const [SessionProvider, useSession] = createContextHook(() => {
             return [...prev, p];
           });
         }
-      );
-      watchSub.current = sub;
+      ).catch(() => null);
+      } catch {
+        console.log("📍 Failed to start location watching");
+        setLocationPermissionDenied(true);
+        setState("idle");
+        setMode(null);
+        return;
+      }
+      
+      if (sub) {
+        watchSub.current = sub;
+      } else {
+        console.log("📍 Location watch subscription failed");
+        setLocationPermissionDenied(true);
+        setState("idle");
+        setMode(null);
+      }
     }
   }, []);
 
