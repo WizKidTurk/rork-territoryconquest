@@ -612,6 +612,17 @@ export const [SessionProvider, useSession] = createContextHook(() => {
     }
     const desired = name.trim().toLowerCase();
     try {
+      const { getDoc, doc } = await import('firebase/firestore');
+      const nameRef = doc(refs.db, 'playerNames', desired);
+      const nameDoc = await getDoc(nameRef);
+      if (nameDoc.exists()) {
+        const data: any = nameDoc.data();
+        console.log(`🔍 Found existing nickname '${desired}' owned by ${data?.ownerId?.slice(0, 8)}, current owner: ${ownerId?.slice(0, 8)}`);
+        if (data?.ownerId && data.ownerId !== ownerId) {
+          console.log(`❌ Nickname '${desired}' is taken by another player`);
+          return false;
+        }
+      }
       const playersCol = collection(refs.db, "players");
       const qNick = query(playersCol, where("nicknameLower", "==", desired));
       const snap = await getDocs(qNick);
@@ -647,39 +658,49 @@ export const [SessionProvider, useSession] = createContextHook(() => {
     const desired = cleanNick.toLowerCase();
     const prev = (nickname ?? '').trim().toLowerCase();
 
+
     try {
-      const { updateDoc, setDoc, doc } = await import('firebase/firestore');
+      const { runTransaction, doc } = await import('firebase/firestore');
 
-      const playersCol = collection(refs.db, 'players');
-      const qNick = query(playersCol, where('nicknameLower', '==', desired));
-      const nickSnap = await getDocs(qNick);
-      
-      for (const d of nickSnap.docs) {
-        const data: any = d.data();
-        if (data?.ownerId && data.ownerId !== ownerId) {
-          throw new Error('This nickname is already taken. Please choose another.');
+      await runTransaction(refs.db, async (tx) => {
+        const nameRef = doc(refs.db, 'playerNames', desired);
+        const existing = await tx.get(nameRef);
+        if (existing.exists()) {
+          const data: any = existing.data();
+          if (data?.ownerId && data.ownerId !== ownerId) {
+            throw new Error('This nickname is already taken. Please choose another.');
+          }
         }
-      }
+        tx.set(nameRef, { ownerId, nickname: cleanNick, updatedAt: serverTimestamp() } as any);
 
-      const qMe = query(playersCol, where('ownerId', '==', ownerId));
-      const meSnap = await getDocs(qMe);
-      const baseData: any = {
-        ownerId,
-        nickname: cleanNick,
-        nicknameLower: desired,
-        avatarStyle: newAvatarStyle,
-        ownerColor,
-        updatedAt: serverTimestamp(),
-      };
-      
-      if (meSnap.empty) {
-        await addDoc(playersCol, baseData);
-        console.log('✅ Created new player profile');
-      } else {
-        const playerDocRef = doc(refs.db, 'players', meSnap.docs[0]!.id);
-        await updateDoc(playerDocRef, baseData);
-        console.log('✅ Updated existing player profile');
-      }
+        if (prev && prev !== desired) {
+          const prevRef = doc(refs.db, 'playerNames', prev);
+          const prevDoc = await tx.get(prevRef);
+          if (prevDoc.exists()) {
+            const pdata: any = prevDoc.data();
+            if (pdata?.ownerId === ownerId) {
+              tx.delete(prevRef);
+            }
+          }
+        }
+
+        const playersCol = collection(refs.db, 'players');
+        const qMe = query(playersCol, where('ownerId', '==', ownerId));
+        const meSnap = await getDocs(qMe);
+        const baseData: any = {
+          ownerId,
+          nickname: cleanNick,
+          nicknameLower: desired,
+          avatarStyle: newAvatarStyle,
+          ownerColor,
+          updatedAt: serverTimestamp(),
+        };
+        if (meSnap.empty) {
+          tx.set(doc(playersCol), baseData as any);
+        } else {
+          tx.update(doc(refs.db, 'players', meSnap.docs[0]!.id), baseData as any);
+        }
+      });
 
       setNickname(cleanNick);
       setAvatarStyle(newAvatarStyle);
