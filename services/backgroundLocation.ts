@@ -99,37 +99,58 @@ if (TaskManager && typeof TaskManager.defineTask === "function") {
 
 export async function startBackgroundLocation(): Promise<void> {
   if (Platform.OS === "web") return;
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(BG_TASK_NAME);
-  if (hasStarted) return;
+  
+  try {
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(BG_TASK_NAME).catch(() => false);
+    if (hasStarted) return;
 
-  const { status: fg } = await Location.requestForegroundPermissionsAsync();
-  if (fg !== "granted") return;
-  const { status: bg } = await Location.requestBackgroundPermissionsAsync();
-  if (bg !== "granted") return;
+    const fgResult = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: "denied" as const }));
+    if (fgResult.status !== "granted") {
+      console.log("📍 BG: Foreground location permission not granted");
+      return;
+    }
+    
+    const bgResult = await Location.requestBackgroundPermissionsAsync().catch(() => ({ status: "denied" as const }));
+    if (bgResult.status !== "granted") {
+      console.log("📍 BG: Background location permission not granted");
+      return;
+    }
 
-  await Location.startLocationUpdatesAsync(BG_TASK_NAME, {
-    accuracy: Location.Accuracy.BestForNavigation,
-    timeInterval: 3000,
-    distanceInterval: 5,
-    pausesUpdatesAutomatically: false,
-    showsBackgroundLocationIndicator: true,
-    activityType: Location.ActivityType.Fitness,
-    deferredUpdatesInterval: 3000,
-    deferredUpdatesDistance: 5,
-    foregroundService: {
-      notificationTitle: "Tracking session",
-      notificationBody: "Your activity is being recorded",
-      notificationColor: "#2563eb",
-      killServiceOnDestroy: false,
-    },
-  });
+    await Location.startLocationUpdatesAsync(BG_TASK_NAME, {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 3000,
+      distanceInterval: 5,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      activityType: Location.ActivityType.Fitness,
+      deferredUpdatesInterval: 3000,
+      deferredUpdatesDistance: 5,
+      foregroundService: {
+        notificationTitle: "Tracking session",
+        notificationBody: "Your activity is being recorded",
+        notificationColor: "#2563eb",
+        killServiceOnDestroy: false,
+      },
+    }).catch((err) => {
+      console.log("📍 BG: Failed to start location updates:", err?.message || err);
+    });
+  } catch (e: any) {
+    console.log("📍 BG: startBackgroundLocation error:", e?.message || e);
+  }
 }
 
 export async function stopBackgroundLocation(): Promise<void> {
   if (Platform.OS === "web") return;
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(BG_TASK_NAME);
-  if (hasStarted) {
-    await Location.stopLocationUpdatesAsync(BG_TASK_NAME);
+  
+  try {
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(BG_TASK_NAME).catch(() => false);
+    if (hasStarted) {
+      await Location.stopLocationUpdatesAsync(BG_TASK_NAME).catch((err) => {
+        console.log("📍 BG: Failed to stop location updates:", err?.message || err);
+      });
+    }
+  } catch (e: any) {
+    console.log("📍 BG: stopBackgroundLocation error:", e?.message || e);
   }
 }
 
