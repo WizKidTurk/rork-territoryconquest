@@ -44,30 +44,36 @@ function Inner() {
   useEffect(() => {
     let cancelled = false;
     async function getInitialLocation() {
+      const fallbackRegion = { latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 };
       try {
         if (Platform.OS === "web") {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              if (cancelled) return;
-              setInitialRegion({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                latitudeDelta: 0.003,
-                longitudeDelta: 0.003,
-              });
-            },
-            () => {
-              if (cancelled) return;
-              setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
-            },
-            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-          );
+          if (navigator?.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                if (cancelled) return;
+                setInitialRegion({
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                  latitudeDelta: 0.003,
+                  longitudeDelta: 0.003,
+                });
+              },
+              () => {
+                if (cancelled) return;
+                setInitialRegion(fallbackRegion);
+              },
+              { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+            );
+          } else {
+            setInitialRegion(fallbackRegion);
+          }
         } else {
           try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== "granted") {
+              console.log("📍 Location permission not granted");
               setShowLocationPrompt(true);
-              setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
+              setInitialRegion(fallbackRegion);
               return;
             }
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
@@ -78,17 +84,22 @@ function Inner() {
               latitudeDelta: 0.003,
               longitudeDelta: 0.003,
             });
-          } catch (locError) {
-            console.log("📍 Location error:", locError);
+          } catch (locError: any) {
+            console.log("📍 Location error:", locError?.message || locError);
             if (!cancelled) {
-              setShowLocationPrompt(true);
-              setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
+              if (locError?.message?.includes("NSLocation") || locError?.message?.includes("Info.plist")) {
+                console.log("📍 Location permissions not configured in Info.plist - using fallback");
+              } else {
+                setShowLocationPrompt(true);
+              }
+              setInitialRegion(fallbackRegion);
             }
           }
         }
-      } catch {
+      } catch (e: any) {
+        console.log("📍 Unexpected location error:", e?.message || e);
         if (!cancelled) {
-          setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
+          setInitialRegion(fallbackRegion);
         }
       }
     }

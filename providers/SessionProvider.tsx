@@ -501,13 +501,19 @@ export const [SessionProvider, useSession] = createContextHook(() => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
+          console.log("📍 Location permission not granted");
           setLocationPermissionDenied(true);
           setState("idle");
           setMode(null);
           return;
         }
-      } catch (permError) {
-        console.log("📍 Location permission error:", permError);
+      } catch (permError: any) {
+        const errorMsg = permError?.message || String(permError);
+        console.log("📍 Location permission error:", errorMsg);
+        if (errorMsg.includes("NSLocation") || errorMsg.includes("Info.plist")) {
+          console.log("📍 Location permissions not configured - this is expected in Expo Go");
+          console.log("📍 Please use a development build or standalone app for full location support");
+        }
         setLocationPermissionDenied(true);
         setState("idle");
         setMode(null);
