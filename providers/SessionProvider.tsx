@@ -498,8 +498,16 @@ export const [SessionProvider, useSession] = createContextHook(() => {
       );
       watchSub.current = id;
     } else {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setLocationPermissionDenied(true);
+          setState("idle");
+          setMode(null);
+          return;
+        }
+      } catch (permError) {
+        console.log("📍 Location permission error:", permError);
         setLocationPermissionDenied(true);
         setState("idle");
         setMode(null);

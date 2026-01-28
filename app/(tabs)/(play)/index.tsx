@@ -63,20 +63,28 @@ function Inner() {
             { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
           );
         } else {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== "granted") {
-            setShowLocationPrompt(true);
-            setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
-            return;
+          try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== "granted") {
+              setShowLocationPrompt(true);
+              setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
+              return;
+            }
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+            if (cancelled) return;
+            setInitialRegion({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              latitudeDelta: 0.003,
+              longitudeDelta: 0.003,
+            });
+          } catch (locError) {
+            console.log("📍 Location error:", locError);
+            if (!cancelled) {
+              setShowLocationPrompt(true);
+              setInitialRegion({ latitude: 37.7749, longitude: -122.4194, latitudeDelta: 0.04, longitudeDelta: 0.04 });
+            }
           }
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-          if (cancelled) return;
-          setInitialRegion({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            latitudeDelta: 0.003,
-            longitudeDelta: 0.003,
-          });
         }
       } catch {
         if (!cancelled) {
