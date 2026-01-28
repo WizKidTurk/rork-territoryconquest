@@ -90,6 +90,11 @@ function NativeMap({
 
   const territoryPolys = useMemo(() => {
     if (!territories || !Array.isArray(territories)) return [];
+    
+    const YOUR_COLOR = ownerColor ?? "#22C55E"; // Green for your territories
+    const OTHER_PLAYER_COLOR = "#EF4444"; // Red for other players' territories
+    const CONTESTED_COLOR = "#F59E0B"; // Orange/amber for contested
+    
     return territories
       .filter((t): t is Territory => !!t && Array.isArray(t.polygon))
       .map((t) => {
@@ -97,11 +102,29 @@ function NativeMap({
         const dominant = [...owners].sort((a, b) => b.strength - a.strength)[0];
         const isYours = Boolean(dominant?.ownerId && ownerId && dominant.ownerId === ownerId);
         const contested = owners.length > 1;
-        const baseColor = isYours ? (ownerColor ?? "#22C55E") : ModeColors[t.mode];
-        const stroke = contested ? "#0EA5E9" : baseColor;
-        const fill = contested ? "#0EA5E977" : (`${baseColor}55` as string);
+        
+        let baseColor: string;
+        let strokeColor: string;
+        let fillColor: string;
+        
+        if (contested) {
+          // Contested territory - orange with pulsing effect visual
+          strokeColor = CONTESTED_COLOR;
+          fillColor = `${CONTESTED_COLOR}55`;
+        } else if (isYours) {
+          // Your territory - green
+          baseColor = YOUR_COLOR;
+          strokeColor = baseColor;
+          fillColor = `${baseColor}55`;
+        } else {
+          // Other player's territory - red
+          baseColor = OTHER_PLAYER_COLOR;
+          strokeColor = baseColor;
+          fillColor = `${baseColor}44`;
+        }
+        
         const coords = (t.polygon ?? []).map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
-        return { id: t.id, coords, stroke: stroke, fill } as const;
+        return { id: t.id, coords, stroke: strokeColor, fill: fillColor, isYours, contested } as const;
       });
   }, [territories, ownerId, ownerColor]);
 
