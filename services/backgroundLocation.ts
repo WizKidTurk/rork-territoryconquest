@@ -8,13 +8,28 @@ export const BG_TASK_NAME = "bg-location-tracking" as const;
 const BG_POINTS_KEY = "bg_points" as const;
 
 let TaskManager: any = null;
-if (Platform.OS !== "web") {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  TaskManager = require("expo-task-manager");
+let taskManagerLoaded = false;
+
+async function loadTaskManager() {
+  if (Platform.OS === "web" || taskManagerLoaded) return;
+  try {
+    TaskManager = await import("expo-task-manager");
+    taskManagerLoaded = true;
+  } catch (e) {
+    console.log("Failed to load expo-task-manager:", e);
+  }
 }
 
-if (TaskManager && typeof TaskManager.defineTask === "function") {
-  TaskManager.defineTask(BG_TASK_NAME, async ({ data, error }: any) => {
+if (Platform.OS !== "web") {
+  loadTaskManager();
+}
+
+function setupBackgroundTask() {
+  if (!TaskManager) return;
+  const defineTask = TaskManager.defineTask || TaskManager.default?.defineTask;
+  if (typeof defineTask !== "function") return;
+  
+  defineTask(BG_TASK_NAME, async ({ data, error }: any) => {
     try {
       if (error) {
         console.log("BG task error", error.message ?? String(error));
@@ -95,6 +110,10 @@ if (TaskManager && typeof TaskManager.defineTask === "function") {
       console.log("BG task store error", e);
     }
   });
+}
+
+if (Platform.OS !== "web") {
+  setTimeout(() => setupBackgroundTask(), 100);
 }
 
 export async function startBackgroundLocation(): Promise<void> {
