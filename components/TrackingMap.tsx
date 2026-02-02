@@ -4,25 +4,8 @@ import { MapPin, Navigation } from "lucide-react-native";
 import { ModeColors, ActivityMode, Player } from "@/constants/game";
 import type { LatLng, Territory } from "@/providers/SessionProvider";
 
-let MapViewModule: any = null;
-let MarkerModule: any = null;
-let PolylineModule: any = null;
-let PolygonModule: any = null;
-let LocationModule: any = null;
-let mapsLoadError = false;
-
-try {
-  MapViewModule = require("react-native-maps").default;
-  const maps = require("react-native-maps");
-  MarkerModule = maps.Marker;
-  PolylineModule = maps.Polyline;
-  PolygonModule = maps.Polygon;
-  LocationModule = require("expo-location");
-  console.log('✅ react-native-maps loaded successfully');
-} catch (e) {
-  console.log('❌ Failed to load react-native-maps at module level:', e);
-  mapsLoadError = true;
-}
+import MapView, { Marker, Polyline, Polygon } from "react-native-maps";
+import * as Location from "expo-location";
 
 export type TrackingMapProps = {
   style?: StyleProp<ViewStyle>;
@@ -74,20 +57,10 @@ function NativeMap({
 }: TrackingMapProps & { onError?: () => void }) {
   const mapRef = useRef<any>(null);
   const [heading, setHeading] = useState<number | null>(null);
-  const hasCalledError = useRef(false);
+
   const hasInitiallyZoomed = useRef(false);
   
-  const MapView = MapViewModule;
-  const Marker = MarkerModule;
-  const Polyline = PolylineModule;
-  const Polygon = PolygonModule;
-  
-  useEffect(() => {
-    if (mapsLoadError && !hasCalledError.current) {
-      hasCalledError.current = true;
-      onError?.();
-    }
-  }, [onError]);
+
 
   const territoryPolys = useMemo(() => {
     if (!territories || !Array.isArray(territories)) return [];
@@ -179,10 +152,10 @@ function NativeMap({
     let cancelled = false;
     (async () => {
       try {
-        if (!isTracking || !LocationModule) return;
-        const { status } = await LocationModule.requestForegroundPermissionsAsync();
+        if (!isTracking) return;
+        const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
-        sub = await LocationModule.watchHeadingAsync((h: any) => {
+        sub = await Location.watchHeadingAsync((h: any) => {
           if (cancelled) return;
           const deg = (h?.trueHeading ?? h?.magHeading ?? -1);
           if (typeof deg === "number" && isFinite(deg) && deg >= 0) {
@@ -199,8 +172,8 @@ function NativeMap({
     };
   }, [isTracking]);
 
-  if (!region || mapsLoadError || !MapView) {
-    console.log('🗺️ NativeMap returning null:', { hasRegion: !!region, mapsLoadError, hasMapView: !!MapView });
+  if (!region) {
+    console.log('🗺️ NativeMap returning null:', { hasRegion: !!region });
     return null;
   }
 
